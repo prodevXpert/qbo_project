@@ -1,6 +1,7 @@
-ProjectName,CustomerName,VendorName,BillDate,BillLineDescription,BillLineAmount,Currency,InvoiceDate,PONumber,PointOfContact,AttachmentFiles
-Project Alpha,Acme Corp,Office Supplies Inc,2024-01-15,Office supplies for project,250.00,USD,2024-01-20,PO-2024-001,John Smith,receipt1.pdf
-Project Beta,Tech Solutions,Hardware Vendor LLC,2024-01-16,Computer equipment,1500.00,USD,2024-01-22,PO-2024-002,Jane Doe,receipt2.pdf;invoice2.pdf
-Project Gamma,Acme Corp,Consulting Services,2024-01-17,Professional consulting,3000.00,USD,2024-01-25,PO-2024-003,Bob Johnson,
-Project Delta,Global Industries,Software Vendor,2024-01-18,Software licenses,800.00,USD,2024-01-26,PO-2024-004,Alice Williams,receipt4.pdf
+BillNumber,Location,ProjectName,CustomerName,VendorName,BillDate,BillLineDescription,BillLineAmount,Currency,InvoiceDate,PONumber,PointOfContact,AttachmentFiles
+BILL-001,Engineering,Project Alpha,Acme Corp,Office Supplies Inc,2024-01-15,Office supplies for project,250.00,USD,2024-01-20,PO-2024-001,John Smith,receipt1.pdf
+BILL-001,Engineering,Project Alpha,Acme Corp,Office Supplies Inc,2024-01-15,Additional office items,150.00,USD,2024-01-20,PO-2024-001,John Smith,receipt1.pdf
+BILL-002,Sales,Project Beta,Tech Solutions,Hardware Vendor LLC,2024-01-16,Computer equipment,1500.00,USD,2024-01-22,PO-2024-002,Jane Doe,receipt2.pdf;invoice2.pdf
+BILL-003,,Project Gamma,Acme Corp,Consulting Services,2024-01-17,Professional consulting,3000.00,USD,2024-01-25,PO-2024-003,Bob Johnson,
+BILL-004,IT,Project Delta,Global Industries,Software Vendor,2024-01-18,Software licenses,800.00,USD,2024-01-26,PO-2024-004,Alice Williams,receipt4.pdf
 

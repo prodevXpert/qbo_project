@@ -9,6 +9,8 @@ interface FieldMapperProps {
 }
 
 const REQUIRED_FIELDS = [
+  { key: "BillNumber", label: "Bill Number", required: true },
+  { key: "Location", label: "Location/Department", required: false },
   { key: "ProjectName", label: "Project Name", required: true },
   { key: "CustomerName", label: "Customer Name", required: true },
   { key: "VendorName", label: "Vendor Name", required: true },
@@ -39,6 +41,25 @@ export function FieldMapper({ csvHeaders, onMappingChange }: FieldMapperProps) {
 
     // Define mapping rules for common column name variations
     const mappingRules: Record<string, string[]> = {
+      BillNumber: [
+        "billnumber",
+        "bill_number",
+        "bill number",
+        "bill_no",
+        "billno",
+        "bill no",
+        "invoice_number",
+        "invoicenumber",
+        "docnumber",
+        "doc_number",
+      ],
+      Location: [
+        "location",
+        "department",
+        "dept",
+        "location/department",
+        "location_department",
+      ],
       ProjectName: [
         "projectname",
         "project_name",
@@ -61,6 +82,10 @@ export function FieldMapper({ csvHeaders, onMappingChange }: FieldMapperProps) {
         "bill_description",
         "bill description",
         "description",
+        "item_description_for invoice",
+        "item description for invoice",
+        "item_description",
+        "item description",
       ],
       BillLineAmount: [
         "billlineamount",

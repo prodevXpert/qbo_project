@@ -24,6 +24,7 @@ export class CSVProcessor {
   // Check if a row is empty (all fields are empty or whitespace)
   private isEmptyRow(row: CSVRow): boolean {
     return (
+      !row.BillNumber?.trim() &&
       !row.ProjectName?.trim() &&
       !row.CustomerName?.trim() &&
       !row.VendorName?.trim() &&
@@ -45,6 +46,13 @@ export class CSVProcessor {
     }
 
     // Required fields
+    if (!row.BillNumber?.trim()) {
+      errors.push({
+        row: rowIndex,
+        field: "BillNumber",
+        message: "Bill number is required",
+      });
+    }
     if (!row.ProjectName?.trim()) {
       errors.push({
         row: rowIndex,
@@ -115,6 +123,9 @@ export class CSVProcessor {
   async dryRun(rows: CSVRow[]): Promise<DryRunResult[]> {
     const results: DryRunResult[] = [];
 
+    // Group rows by BillNumber
+    const billGroups = new Map<string, { rows: CSVRow[]; indices: number[] }>();
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
 
@@ -123,39 +134,92 @@ export class CSVProcessor {
         continue;
       }
 
-      const actions: string[] = [];
-      const warnings: string[] = [];
-      const errors = this.validateRow(row, i);
-
-      if (errors.length > 0) {
+      const billNumber = row.BillNumber?.trim();
+      if (!billNumber) {
         results.push({
           rowIndex: i,
           actions: [],
           warnings: [],
-          errors: errors.map((e) => `${e.field}: ${e.message}`),
+          errors: ["BillNumber is required"],
         });
         continue;
       }
 
-      // Simulate actions
-      actions.push(`Find or create Customer: "${row.CustomerName}"`);
-      actions.push(
-        `Find or create Sub-Customer (Project): "${row.ProjectName}" under "${row.CustomerName}"`
-      );
-      actions.push(`Find or create Vendor: "${row.VendorName}"`);
-      actions.push(
-        `Create Bill for ${row.BillLineAmount} ${
-          row.Currency || this.settings.defaultCurrency
-        }`
-      );
+      if (!billGroups.has(billNumber)) {
+        billGroups.set(billNumber, { rows: [], indices: [] });
+      }
+      billGroups.get(billNumber)!.rows.push(row);
+      billGroups.get(billNumber)!.indices.push(i);
+    }
 
-      const attachments =
-        row.AttachmentFiles?.split(";").filter((f) => f.trim()) || [];
-      if (attachments.length > 0) {
+    // Process each bill group for dry run
+    for (const [billNumber, group] of billGroups.entries()) {
+      const firstRow = group.rows[0];
+      const actions: string[] = [];
+      const warnings: string[] = [];
+      const allErrors: string[] = [];
+
+      // Validate all rows in the group
+      for (let i = 0; i < group.rows.length; i++) {
+        const errors = this.validateRow(group.rows[i], group.indices[i]);
+        if (errors.length > 0) {
+          allErrors.push(
+            ...errors.map(
+              (e) => `Row ${group.indices[i] + 1}: ${e.field}: ${e.message}`
+            )
+          );
+        }
+      }
+
+      if (allErrors.length > 0) {
+        // Add error result for each row in the group
+        for (const idx of group.indices) {
+          results.push({
+            rowIndex: idx,
+            actions: [],
+            warnings: [],
+            errors: allErrors,
+          });
+        }
+        continue;
+      }
+
+      // Simulate actions for the bill
+      actions.push(
+        `Create Bill #${billNumber} with ${group.rows.length} line item(s)`
+      );
+      actions.push(`Find or create Customer: "${firstRow.CustomerName}"`);
+      actions.push(`Find or create Vendor: "${firstRow.VendorName}"`);
+
+      if (firstRow.Location?.trim()) {
+        actions.push(`Find Department/Location: "${firstRow.Location}"`);
+      }
+
+      // Add actions for each line item
+      for (let i = 0; i < group.rows.length; i++) {
+        const row = group.rows[i];
         actions.push(
-          `Attach ${attachments.length} file(s) to Bill: ${attachments.join(
-            ", "
-          )}`
+          `  Line ${i + 1}: Project "${row.ProjectName}" - ${
+            row.BillLineAmount
+          } ${row.Currency || this.settings.defaultCurrency} - ${
+            row.BillLineDescription
+          }`
+        );
+      }
+
+      // Collect all unique attachments
+      const allAttachments = new Set<string>();
+      for (const row of group.rows) {
+        const attachments =
+          row.AttachmentFiles?.split(";").filter((f) => f.trim()) || [];
+        attachments.forEach((f) => allAttachments.add(f.trim()));
+      }
+
+      if (allAttachments.size > 0) {
+        actions.push(
+          `Attach ${allAttachments.size} file(s) to Bill: ${Array.from(
+            allAttachments
+          ).join(", ")}`
         );
         if (this.settings.alsoAttachToInvoice) {
           actions.push(`Also attach files to Invoice`);
@@ -163,19 +227,22 @@ export class CSVProcessor {
       }
 
       actions.push(`Create Invoice from billable expenses`);
-      if (row.PONumber?.trim()) {
-        actions.push(`Set PO Number: ${row.PONumber}`);
+      if (firstRow.PONumber?.trim()) {
+        actions.push(`Set PO Number: ${firstRow.PONumber}`);
       }
-      if (row.PointOfContact?.trim()) {
-        actions.push(`Set Point of Contact: "${row.PointOfContact}"`);
+      if (firstRow.PointOfContact?.trim()) {
+        actions.push(`Set Point of Contact: "${firstRow.PointOfContact}"`);
       }
 
-      results.push({
-        rowIndex: i,
-        actions,
-        warnings,
-        errors: [],
-      });
+      // Add the same result for each row in the group
+      for (const idx of group.indices) {
+        results.push({
+          rowIndex: idx,
+          actions,
+          warnings,
+          errors: [],
+        });
+      }
     }
 
     return results;
@@ -397,15 +464,303 @@ export class CSVProcessor {
   ): Promise<ProcessingResult[]> {
     const results: ProcessingResult[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const result = await this.processRow(rows[i], i, attachments);
-      results.push(result);
+    // Group rows by BillNumber
+    const billGroups = new Map<string, { rows: CSVRow[]; indices: number[] }>();
 
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+
+      // Skip empty rows
+      if (this.isEmptyRow(row)) {
+        results.push({
+          rowIndex: i,
+          status: "skipped",
+          message: "Empty row",
+        });
+        continue;
+      }
+
+      const billNumber = row.BillNumber?.trim();
+      if (!billNumber) {
+        results.push({
+          rowIndex: i,
+          status: "error",
+          error: "BillNumber is required",
+        });
+        continue;
+      }
+
+      if (!billGroups.has(billNumber)) {
+        billGroups.set(billNumber, { rows: [], indices: [] });
+      }
+      billGroups.get(billNumber)!.rows.push(row);
+      billGroups.get(billNumber)!.indices.push(i);
+    }
+
+    // Process each bill group
+    let processedCount = 0;
+    for (const [billNumber, group] of billGroups.entries()) {
+      const billResult = await this.processBillGroup(
+        billNumber,
+        group.rows,
+        group.indices,
+        attachments
+      );
+
+      // Add results for each row in the group
+      for (let i = 0; i < group.indices.length; i++) {
+        results.push({
+          ...billResult,
+          rowIndex: group.indices[i],
+        });
+      }
+
+      processedCount += group.rows.length;
       if (onProgress) {
-        onProgress(i + 1, rows.length);
+        onProgress(processedCount, rows.length);
       }
     }
 
     return results;
+  }
+
+  private async processBillGroup(
+    billNumber: string,
+    rows: CSVRow[],
+    indices: number[],
+    attachments: Map<string, UploadedFile>
+  ): Promise<Omit<ProcessingResult, "rowIndex">> {
+    try {
+      // Use the first row for bill-level information
+      const firstRow = rows[0];
+      const firstIndex = indices[0];
+
+      // Validate all rows in the group
+      for (let i = 0; i < rows.length; i++) {
+        const errors = this.validateRow(rows[i], indices[i]);
+        if (errors.length > 0) {
+          return {
+            status: "error",
+            error: `Row ${indices[i] + 1}: ${errors
+              .map((e) => `${e.field}: ${e.message}`)
+              .join("; ")}`,
+          };
+        }
+      }
+
+      // Check idempotency for the bill
+      const idempotencyKey = `bill_${billNumber}`;
+      if (this.processedKeys.has(idempotencyKey)) {
+        return {
+          status: "skipped",
+          message: `Bill ${billNumber} already processed`,
+          idempotencyKey,
+        };
+      }
+
+      // Step 1: Upsert Customer (from first row)
+      let customer = await this.qboService.findCustomerByName(
+        firstRow.CustomerName
+      );
+      if (!customer) {
+        if (this.settings.autoCreate) {
+          customer = await this.qboService.createCustomer(
+            firstRow.CustomerName
+          );
+        } else {
+          return {
+            status: "needs_review",
+            error: `Customer "${firstRow.CustomerName}" not found. Enable auto-create or create manually.`,
+          };
+        }
+      }
+
+      // Step 2: Upsert Vendor (from first row)
+      let vendor = await this.qboService.findVendorByName(firstRow.VendorName);
+      if (!vendor) {
+        if (this.settings.autoCreate) {
+          vendor = await this.qboService.createVendor(firstRow.VendorName);
+        } else {
+          return {
+            status: "needs_review",
+            error: `Vendor "${firstRow.VendorName}" not found. Enable auto-create or create manually.`,
+          };
+        }
+      }
+
+      // Step 3: Find Department/Location if specified
+      let departmentId: string | undefined;
+      if (firstRow.Location?.trim()) {
+        const department = await this.qboService.findDepartmentByName(
+          firstRow.Location.trim()
+        );
+        if (department) {
+          departmentId = department.Id;
+        }
+        // If department not found, we'll just skip it (optional field)
+      }
+
+      // Step 4: Create line items for each row
+      const expenseAccountId = await this.qboService.getExpenseAccount();
+      const billLines: any[] = [];
+      const allSubCustomerIds: string[] = [];
+
+      for (const row of rows) {
+        // Upsert Sub-Customer (Project) for each line
+        let subCustomer = await this.qboService.findCustomerByName(
+          row.ProjectName
+        );
+        if (!subCustomer) {
+          subCustomer = await this.qboService.createCustomer(
+            row.ProjectName,
+            customer.Id
+          );
+        }
+        allSubCustomerIds.push(subCustomer.Id!);
+
+        const amount = validateAmount(row.BillLineAmount)!;
+        billLines.push({
+          DetailType: "AccountBasedExpenseLineDetail",
+          Amount: amount,
+          Description: row.BillLineDescription,
+          AccountBasedExpenseLineDetail: {
+            AccountRef: { value: expenseAccountId },
+            CustomerRef: { value: subCustomer.Id! },
+            BillableStatus: "Billable",
+          },
+        });
+      }
+
+      // Step 5: Create Bill with all line items
+      const billDate = parseDate(
+        firstRow.BillDate,
+        this.settings.strictDateParsing
+      )!;
+      const billData: any = {
+        DocNumber: billNumber,
+        VendorRef: { value: vendor.Id! },
+        TxnDate: billDate.toISOString().split("T")[0],
+        Line: billLines,
+        CurrencyRef: firstRow.Currency
+          ? { value: firstRow.Currency }
+          : undefined,
+      };
+
+      if (departmentId) {
+        billData.DepartmentRef = { value: departmentId };
+      }
+
+      const bill = await this.qboService.createBill(billData);
+
+      // Step 6: Attach files to Bill (collect all unique files from all rows)
+      const attachmentResults: AttachmentResult[] = [];
+      const allFileNames = new Set<string>();
+
+      for (const row of rows) {
+        const fileNames =
+          row.AttachmentFiles?.split(";").filter((f) => f.trim()) || [];
+        fileNames.forEach((f) => allFileNames.add(f.trim()));
+      }
+
+      for (const fileName of allFileNames) {
+        const file = attachments.get(fileName);
+        if (file) {
+          try {
+            const attachable = await this.qboService.uploadAttachment(
+              file,
+              "Bill",
+              bill.Id
+            );
+            attachmentResults.push({
+              filename: fileName,
+              attachableId: attachable.Id,
+              status: "success",
+            });
+          } catch (error: any) {
+            attachmentResults.push({
+              filename: fileName,
+              status: "error",
+              error: error.message,
+            });
+          }
+        } else {
+          attachmentResults.push({
+            filename: fileName,
+            status: "error",
+            error: "File not found in uploads",
+          });
+        }
+      }
+
+      // Step 7: Create Invoice from billable expenses (using first row's invoice date)
+      const invoiceDate = parseDate(
+        firstRow.InvoiceDate,
+        this.settings.strictDateParsing
+      )!;
+
+      // Create invoice for the first sub-customer (or we could create multiple invoices)
+      const invoice = await this.qboService.createInvoiceFromBillableExpenses(
+        allSubCustomerIds[0],
+        invoiceDate.toISOString().split("T")[0],
+        firstRow.PONumber,
+        firstRow.PointOfContact,
+        firstRow.Currency || this.settings.defaultCurrency
+      );
+
+      // Step 8: Optionally attach files to Invoice
+      if (this.settings.alsoAttachToInvoice) {
+        for (const fileName of allFileNames) {
+          const file = attachments.get(fileName);
+          if (file) {
+            try {
+              await this.qboService.uploadAttachment(
+                file,
+                "Invoice",
+                invoice.Id
+              );
+            } catch (error) {
+              console.error(`Failed to attach ${fileName} to invoice:`, error);
+            }
+          }
+        }
+      }
+
+      // Mark as processed
+      this.processedKeys.add(idempotencyKey);
+
+      return {
+        status: "success",
+        customerId: customer.Id,
+        subCustomerId: allSubCustomerIds[0],
+        vendorId: vendor.Id,
+        billId: bill.Id,
+        invoiceId: invoice.Id,
+        attachmentResults,
+        idempotencyKey,
+        message: `Bill ${billNumber} created with ${billLines.length} line items`,
+      };
+    } catch (error: any) {
+      console.error(`Error processing bill ${billNumber}:`, error);
+
+      // Extract meaningful error message
+      let errorMessage = "Unknown error occurred";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      } else if (error.fault?.error?.[0]) {
+        errorMessage =
+          error.fault.error[0].message || error.fault.error[0].detail;
+      } else if (error.toString && error.toString() !== "[object Object]") {
+        errorMessage = error.toString();
+      } else {
+        errorMessage = JSON.stringify(error);
+      }
+
+      return {
+        status: "error",
+        error: errorMessage,
+      };
+    }
   }
 }

@@ -1,4 +1,6 @@
 export interface CSVRow {
+  BillNumber: string;
+  Location: string;
   ProjectName: string;
   CustomerName: string;
   VendorName: string;
@@ -13,6 +15,8 @@ export interface CSVRow {
 }
 
 export interface FieldMapping {
+  BillNumber: string;
+  Location: string;
   ProjectName: string;
   CustomerName: string;
   VendorName: string;
@@ -92,8 +96,13 @@ export interface QBOVendor {
 
 export interface QBOBill {
   Id?: string;
+  DocNumber?: string;
   VendorRef: {
     value: string;
+  };
+  DepartmentRef?: {
+    value: string;
+    name?: string;
   };
   Line: Array<{
     DetailType: "AccountBasedExpenseLineDetail";
