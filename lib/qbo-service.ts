@@ -280,10 +280,8 @@ export class QBOService {
     return this.retryWithBackoff(async () => {
       return new Promise(async (resolve, reject) => {
         try {
-          // Query billable expenses for this customer
-          const query = `SELECT * FROM Bill WHERE Line.AccountBasedExpenseLineDetail.CustomerRef = '${customerId}' AND Line.AccountBasedExpenseLineDetail.BillableStatus = 'Billable'`;
-
-          this.qbo.query(query, async (err: any, billsData: any) => {
+          // Find all bills with billable expenses for this customer
+          this.qbo.findBills({}, async (err: any, billsData: any) => {
             if (err) {
               reject(err);
               return;
@@ -292,7 +290,7 @@ export class QBOService {
             const bills = billsData?.QueryResponse?.Bill || [];
             const invoiceLines: any[] = [];
 
-            // Collect all billable line items from bills
+            // Collect all billable line items from bills for this customer
             for (const bill of bills) {
               if (bill.Line) {
                 for (const line of bill.Line) {
