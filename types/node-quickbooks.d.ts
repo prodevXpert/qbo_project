@@ -58,6 +58,8 @@ declare module "node-quickbooks" {
       callback: (err: any, classes: any) => void
     ): void;
 
+    query(query: string, callback: (err: any, result: any) => void): void;
+
     reportBillableExpenseDetail(
       options: any,
       callback: (err: any, result: any) => void

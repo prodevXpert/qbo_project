@@ -280,47 +280,93 @@ export class QBOService {
     return this.retryWithBackoff(async () => {
       return new Promise(async (resolve, reject) => {
         try {
-          const invoice: QBOInvoice = {
-            CustomerRef: { value: customerId },
-            TxnDate: invoiceDate,
-            Line: [
-              {
+          // Query billable expenses for this customer
+          const query = `SELECT * FROM Bill WHERE Line.AccountBasedExpenseLineDetail.CustomerRef = '${customerId}' AND Line.AccountBasedExpenseLineDetail.BillableStatus = 'Billable'`;
+
+          this.qbo.query(query, async (err: any, billsData: any) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+
+            const bills = billsData?.QueryResponse?.Bill || [];
+            const invoiceLines: any[] = [];
+
+            // Collect all billable line items from bills
+            for (const bill of bills) {
+              if (bill.Line) {
+                for (const line of bill.Line) {
+                  if (
+                    line.DetailType === "AccountBasedExpenseLineDetail" &&
+                    line.AccountBasedExpenseLineDetail?.BillableStatus ===
+                      "Billable" &&
+                    line.AccountBasedExpenseLineDetail?.CustomerRef?.value ===
+                      customerId
+                  ) {
+                    // Create invoice line from billable expense
+                    invoiceLines.push({
+                      DetailType: "SalesItemLineDetail",
+                      Amount: line.Amount,
+                      Description: line.Description || "",
+                      SalesItemLineDetail: {
+                        ItemRef: { value: "1" }, // Services item - should be configurable
+                        Qty: 1,
+                        UnitPrice: line.Amount,
+                      },
+                    });
+                  }
+                }
+              }
+            }
+
+            // If no billable expenses found, create a placeholder line
+            if (invoiceLines.length === 0) {
+              invoiceLines.push({
                 DetailType: "SalesItemLineDetail",
                 Amount: 0,
+                Description: "No billable expenses found",
                 SalesItemLineDetail: {
-                  ItemRef: { value: "1" }, // Services item
+                  ItemRef: { value: "1" },
+                  Qty: 0,
+                  UnitPrice: 0,
                 },
-              },
-            ],
-          };
+              });
+            }
 
-          // Add PONumber if provided
-          if (poNumber?.trim()) {
-            invoice.PONumber = poNumber;
-          }
+            const invoice: QBOInvoice = {
+              CustomerRef: { value: customerId },
+              TxnDate: invoiceDate,
+              Line: invoiceLines,
+            };
 
-          // Add Point of Contact custom field if provided
-          if (pointOfContact?.trim()) {
-            const customFieldId = await this.getOrCreateCustomField(
-              "Point of Contact"
-            );
-            invoice.CustomField = [
-              {
-                DefinitionId: customFieldId,
-                Name: "Point of Contact",
-                Type: "StringType",
-                StringValue: pointOfContact,
-              },
-            ];
-          }
+            // Add PONumber if provided
+            if (poNumber?.trim()) {
+              invoice.PONumber = poNumber;
+            }
 
-          if (currency) {
-            invoice.CurrencyRef = { value: currency };
-          }
+            // Add Point of Contact custom field if provided
+            if (pointOfContact?.trim()) {
+              const customFieldId = await this.getOrCreateCustomField(
+                "Point of Contact"
+              );
+              invoice.CustomField = [
+                {
+                  DefinitionId: customFieldId,
+                  Name: "Point of Contact",
+                  Type: "StringType",
+                  StringValue: pointOfContact,
+                },
+              ];
+            }
 
-          this.qbo.createInvoice(invoice, (err: any, result: any) => {
-            if (err) reject(err);
-            else resolve(result);
+            if (currency) {
+              invoice.CurrencyRef = { value: currency };
+            }
+
+            this.qbo.createInvoice(invoice, (err: any, result: any) => {
+              if (err) reject(err);
+              else resolve(result);
+            });
           });
         } catch (error) {
           reject(error);
