@@ -363,10 +363,12 @@ export class CSVProcessor {
         idempotencyKey,
       };
     } catch (error: any) {
+      console.error(`Error processing row ${rowIndex}:`, error);
+      console.error("Row data:", row);
       return {
         rowIndex,
         status: "error",
-        error: error.message || "Unknown error occurred",
+        error: error.message || error.toString() || "Unknown error occurred",
       };
     }
   }
