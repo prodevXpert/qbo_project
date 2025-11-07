@@ -1,50 +1,49 @@
-'use client'
+"use client";
 
-import { useCallback, useState } from 'react'
-import Papa from 'papaparse'
-import { Upload } from 'lucide-react'
-import { Button } from './ui/button'
+import { Upload } from "lucide-react";
+import Papa from "papaparse";
+import { useCallback, useState } from "react";
 
 interface CSVUploadProps {
-  onDataLoaded: (data: any[], headers: string[]) => void
+  onDataLoaded: (data: any[], headers: string[]) => void;
 }
 
 export function CSVUpload({ onDataLoaded }: CSVUploadProps) {
-  const [fileName, setFileName] = useState<string>('')
-  const [error, setError] = useState<string>('')
+  const [fileName, setFileName] = useState<string>("");
+  const [error, setError] = useState<string>("");
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (!file) return
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-      if (!file.name.endsWith('.csv')) {
-        setError('Please upload a CSV file')
-        return
+      if (!file.name.endsWith(".csv")) {
+        setError("Please upload a CSV file");
+        return;
       }
 
-      setFileName(file.name)
-      setError('')
+      setFileName(file.name);
+      setError("");
 
       Papa.parse(file, {
         header: true,
-        skipEmptyLines: true,
+        skipEmptyLines: "greedy",
         complete: (results) => {
           if (results.errors.length > 0) {
-            setError(`CSV parsing error: ${results.errors[0].message}`)
-            return
+            setError(`CSV parsing error: ${results.errors[0].message}`);
+            return;
           }
 
-          const headers = results.meta.fields || []
-          onDataLoaded(results.data, headers)
+          const headers = results.meta.fields || [];
+          onDataLoaded(results.data, headers);
         },
         error: (error) => {
-          setError(`Failed to parse CSV: ${error.message}`)
+          setError(`Failed to parse CSV: ${error.message}`);
         },
-      })
+      });
     },
     [onDataLoaded]
-  )
+  );
 
   return (
     <div className="w-full">
@@ -84,6 +83,5 @@ export function CSVUpload({ onDataLoaded }: CSVUploadProps) {
         </div>
       )}
     </div>
-  )
+  );
 }
-

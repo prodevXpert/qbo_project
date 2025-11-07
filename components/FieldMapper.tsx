@@ -21,8 +21,8 @@ const REQUIRED_FIELDS = [
   { key: "BillLineAmount", label: "Bill Line Amount", required: true },
   { key: "Currency", label: "Currency", required: false },
   { key: "InvoiceDate", label: "Invoice Date", required: true },
-  { key: "PONumber", label: "PO Number", required: true },
-  { key: "PointOfContact", label: "Point of Contact", required: true },
+  { key: "PONumber", label: "PO Number", required: false },
+  { key: "PointOfContact", label: "Point of Contact", required: false },
   {
     key: "AttachmentFiles",
     label: "Attachment Files (semicolon-separated)",
