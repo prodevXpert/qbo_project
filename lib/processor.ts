@@ -365,10 +365,27 @@ export class CSVProcessor {
     } catch (error: any) {
       console.error(`Error processing row ${rowIndex}:`, error);
       console.error("Row data:", row);
+
+      // Extract meaningful error message
+      let errorMessage = "Unknown error occurred";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      } else if (error.fault?.error?.[0]) {
+        // QuickBooks API error format
+        errorMessage =
+          error.fault.error[0].message || error.fault.error[0].detail;
+      } else if (error.toString && error.toString() !== "[object Object]") {
+        errorMessage = error.toString();
+      } else {
+        errorMessage = JSON.stringify(error);
+      }
+
       return {
         rowIndex,
         status: "error",
-        error: error.message || error.toString() || "Unknown error occurred",
+        error: errorMessage,
       };
     }
   }
