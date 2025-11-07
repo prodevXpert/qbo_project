@@ -81,8 +81,13 @@ export class QBOService {
     return this.retryWithBackoff(async () => {
       return new Promise((resolve, reject) => {
         const customer: any = { DisplayName: displayName };
+
+        // If parentRef is provided, this is a sub-customer (project/job)
         if (parentRef) {
           customer.ParentRef = { value: parentRef };
+          customer.Job = true;
+        } else {
+          customer.Job = false;
         }
 
         this.qbo.createCustomer(customer, (err: any, result: any) => {
