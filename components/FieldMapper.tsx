@@ -34,11 +34,64 @@ export function FieldMapper({ csvHeaders, onMappingChange }: FieldMapperProps) {
   const [mapping, setMapping] = useState<FieldMapping>({} as FieldMapping);
 
   useEffect(() => {
-    // Auto-map fields with exact matches
+    // Auto-map fields with exact matches and common variations
     const autoMapping: any = {};
+
+    // Define mapping rules for common column name variations
+    const mappingRules: Record<string, string[]> = {
+      ProjectName: [
+        "projectname",
+        "project_name",
+        "project name",
+        "project_number",
+        "project number",
+        "project_number:customer",
+      ],
+      CustomerName: [
+        "customername",
+        "customer_name",
+        "customer name",
+        "customer",
+      ],
+      VendorName: ["vendorname", "vendor_name", "vendor name", "vendor"],
+      BillDate: ["billdate", "bill_date", "bill date"],
+      BillLineDescription: [
+        "billlinedescription",
+        "bill_line_description",
+        "bill_description",
+        "bill description",
+        "description",
+      ],
+      BillLineAmount: [
+        "billlineamount",
+        "bill_line_amount",
+        "bill_amount",
+        "bill amount",
+        "line_amount",
+        "amount",
+      ],
+      Currency: ["currency"],
+      InvoiceDate: ["invoicedate", "invoice_date", "invoice date"],
+      PONumber: ["ponumber", "po_number", "po number", "po"],
+      PointOfContact: [
+        "pointofcontact",
+        "point_of_contact",
+        "point of contact",
+        "contact",
+      ],
+      AttachmentFiles: [
+        "attachmentfiles",
+        "attachment_files",
+        "attachment files",
+        "attachment_url",
+        "attachments",
+      ],
+    };
+
     REQUIRED_FIELDS.forEach((field) => {
-      const match = csvHeaders.find(
-        (h) => h.toLowerCase() === field.key.toLowerCase()
+      const variations = mappingRules[field.key] || [];
+      const match = csvHeaders.find((h) =>
+        variations.includes(h.toLowerCase().trim())
       );
       if (match) {
         autoMapping[field.key] = match;
