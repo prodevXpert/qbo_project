@@ -53,6 +53,11 @@ declare module "node-quickbooks" {
       callback: (err: any, departments: any) => void
     ): void;
 
+    findClasses(
+      criteria: Array<{ field: string; value: string; operator: string }>,
+      callback: (err: any, classes: any) => void
+    ): void;
+
     reportBillableExpenseDetail(
       options: any,
       callback: (err: any, result: any) => void

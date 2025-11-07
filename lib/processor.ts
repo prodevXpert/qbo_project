@@ -31,6 +31,7 @@ export class CSVProcessor {
       !row.BillDate?.trim() &&
       !row.BillLineDescription?.trim() &&
       !row.BillLineAmount?.trim() &&
+      !row.Category?.trim() &&
       !row.InvoiceDate?.trim() &&
       !row.PONumber?.trim() &&
       !row.PointOfContact?.trim()
@@ -322,13 +323,35 @@ export class CSVProcessor {
         }
       }
 
-      // Step 4: Create Bill
+      // Step 4: Find Category/Class if specified
+      let classId: string | undefined;
+      if (row.Category?.trim()) {
+        const classObj = await this.qboService.findClassByName(
+          row.Category.trim()
+        );
+        if (classObj) {
+          classId = classObj.Id;
+        }
+        // If class not found, we'll just skip it (optional field)
+      }
+
+      // Step 5: Create Bill
       const amount = validateAmount(row.BillLineAmount)!;
       const billDate = parseDate(
         row.BillDate,
         this.settings.strictDateParsing
       )!;
       const expenseAccountId = await this.qboService.getExpenseAccount();
+
+      const lineDetail: any = {
+        AccountRef: { value: expenseAccountId },
+        CustomerRef: { value: subCustomer.Id! },
+        BillableStatus: "Billable",
+      };
+
+      if (classId) {
+        lineDetail.ClassRef = { value: classId };
+      }
 
       const bill = await this.qboService.createBill({
         VendorRef: { value: vendor.Id! },
@@ -338,17 +361,13 @@ export class CSVProcessor {
             DetailType: "AccountBasedExpenseLineDetail",
             Amount: amount,
             Description: row.BillLineDescription,
-            AccountBasedExpenseLineDetail: {
-              AccountRef: { value: expenseAccountId },
-              CustomerRef: { value: subCustomer.Id! },
-              BillableStatus: "Billable",
-            },
+            AccountBasedExpenseLineDetail: lineDetail,
           },
         ],
         CurrencyRef: row.Currency ? { value: row.Currency } : undefined,
       });
 
-      // Step 5: Attach files to Bill
+      // Step 6: Attach files to Bill
       const attachmentResults: AttachmentResult[] = [];
       const fileNames =
         row.AttachmentFiles?.split(";").filter((f) => f.trim()) || [];
@@ -618,16 +637,33 @@ export class CSVProcessor {
         }
         allSubCustomerIds.push(subCustomer.Id!);
 
+        // Find Category/Class if specified
+        let classId: string | undefined;
+        if (row.Category?.trim()) {
+          const classObj = await this.qboService.findClassByName(
+            row.Category.trim()
+          );
+          if (classObj) {
+            classId = classObj.Id;
+          }
+        }
+
         const amount = validateAmount(row.BillLineAmount)!;
+        const lineDetail: any = {
+          AccountRef: { value: expenseAccountId },
+          CustomerRef: { value: subCustomer.Id! },
+          BillableStatus: "Billable",
+        };
+
+        if (classId) {
+          lineDetail.ClassRef = { value: classId };
+        }
+
         billLines.push({
           DetailType: "AccountBasedExpenseLineDetail",
           Amount: amount,
           Description: row.BillLineDescription,
-          AccountBasedExpenseLineDetail: {
-            AccountRef: { value: expenseAccountId },
-            CustomerRef: { value: subCustomer.Id! },
-            BillableStatus: "Billable",
-          },
+          AccountBasedExpenseLineDetail: lineDetail,
         });
       }
 

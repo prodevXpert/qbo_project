@@ -7,6 +7,7 @@ export interface CSVRow {
   BillDate: string;
   BillLineDescription: string;
   BillLineAmount: string;
+  Category: string;
   Currency: string;
   InvoiceDate: string;
   PONumber: string;
@@ -23,6 +24,7 @@ export interface FieldMapping {
   BillDate: string;
   BillLineDescription: string;
   BillLineAmount: string;
+  Category: string;
   Currency: string;
   InvoiceDate: string;
   PONumber: string;
@@ -114,6 +116,10 @@ export interface QBOBill {
       };
       CustomerRef?: {
         value: string;
+      };
+      ClassRef?: {
+        value: string;
+        name?: string;
       };
       BillableStatus?: "Billable" | "NotBillable" | "HasBeenBilled";
     };

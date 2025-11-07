@@ -241,6 +241,29 @@ export class QBOService {
     });
   }
 
+  async findClassByName(
+    name: string
+  ): Promise<{ Id: string; Name: string } | null> {
+    return this.retryWithBackoff(async () => {
+      return new Promise((resolve, reject) => {
+        this.qbo.findClasses(
+          [{ field: "Name", value: name, operator: "=" }],
+          (err: any, classes: any) => {
+            if (err) {
+              if (err.fault?.error?.[0]?.code === "500") {
+                resolve(null); // Not found
+              } else {
+                reject(err);
+              }
+            } else {
+              resolve(classes?.QueryResponse?.Class?.[0] || null);
+            }
+          }
+        );
+      });
+    });
+  }
+
   async getOrCreateCustomField(fieldName: string): Promise<string> {
     // QuickBooks custom fields need to be created in the UI first
     // This method returns a placeholder - in production, you'd query existing custom fields
