@@ -264,6 +264,28 @@ export class QBOService {
     });
   }
 
+  async createClass(name: string): Promise<{ Id: string; Name: string }> {
+    return this.retryWithBackoff(async () => {
+      return new Promise((resolve, reject) => {
+        this.qbo.createClass({ Name: name }, (err: any, result: any) => {
+          if (err) reject(err);
+          else resolve(result);
+        });
+      });
+    });
+  }
+
+  async createDepartment(name: string): Promise<{ Id: string; Name: string }> {
+    return this.retryWithBackoff(async () => {
+      return new Promise((resolve, reject) => {
+        this.qbo.createDepartment({ Name: name }, (err: any, result: any) => {
+          if (err) reject(err);
+          else resolve(result);
+        });
+      });
+    });
+  }
+
   async getOrCreateCustomField(fieldName: string): Promise<string> {
     // QuickBooks custom fields need to be created in the UI first
     // This method returns a placeholder - in production, you'd query existing custom fields

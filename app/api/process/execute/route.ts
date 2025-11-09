@@ -1,6 +1,7 @@
 import { CSVProcessor } from "@/lib/processor";
+import { qboAuthService } from "@/lib/qbo-auth";
 import { CSVRow, ProcessingSettings, UploadedFile } from "@/lib/types";
-import { jwtVerify } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -17,7 +18,31 @@ export async function POST(request: NextRequest) {
     // Decrypt tokens
     const secret = new TextEncoder().encode(process.env.SESSION_SECRET!);
     const { payload } = await jwtVerify(session.value, secret);
-    const tokens = payload.tokens as any;
+    let tokens = payload.tokens as any;
+
+    // Refresh token if expired
+    try {
+      tokens = await qboAuthService.getValidToken(tokens);
+
+      // Update cookie with refreshed tokens
+      const encryptedTokens = await new SignJWT({ tokens })
+        .setProtectedHeader({ alg: "HS256" })
+        .setExpirationTime("30d")
+        .sign(secret);
+
+      cookieStore.set("qbo_session", encryptedTokens, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      });
+    } catch (refreshError: any) {
+      console.error("Token refresh failed:", refreshError);
+      return NextResponse.json(
+        { error: "Authentication expired. Please reconnect to QuickBooks." },
+        { status: 401 }
+      );
+    }
 
     // Parse multipart form data
     const formData = await request.formData();

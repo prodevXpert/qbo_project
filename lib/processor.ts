@@ -193,19 +193,24 @@ export class CSVProcessor {
       actions.push(`Find or create Vendor: "${firstRow.VendorName}"`);
 
       if (firstRow.Location?.trim()) {
-        actions.push(`Find Department/Location: "${firstRow.Location}"`);
+        actions.push(
+          `Find or create Department/Location: "${firstRow.Location}"`
+        );
       }
 
       // Add actions for each line item
       for (let i = 0; i < group.rows.length; i++) {
         const row = group.rows[i];
-        actions.push(
-          `  Line ${i + 1}: Project "${row.ProjectName}" - ${
-            row.BillLineAmount
-          } ${row.Currency || this.settings.defaultCurrency} - ${
-            row.BillLineDescription
-          }`
-        );
+        const lineDesc = `  Line ${i + 1}: Project "${row.ProjectName}" - ${
+          row.BillLineAmount
+        } ${row.Currency || this.settings.defaultCurrency} - ${
+          row.BillLineDescription
+        }`;
+        actions.push(lineDesc);
+
+        if (row.Category?.trim()) {
+          actions.push(`    Category/Class: "${row.Category}"`);
+        }
       }
 
       // Collect all unique attachments
@@ -323,19 +328,63 @@ export class CSVProcessor {
         }
       }
 
-      // Step 4: Find Category/Class if specified
+      // Step 4: Find or Create Department/Location if specified
+      let departmentId: string | undefined;
+      if (row.Location?.trim()) {
+        console.log(
+          `Looking for Location/Department: "${row.Location.trim()}"`
+        );
+        let department = await this.qboService.findDepartmentByName(
+          row.Location.trim()
+        );
+        if (department) {
+          departmentId = department.Id;
+          console.log(`Found Department ID: ${departmentId}`);
+        } else {
+          console.log(
+            `Department "${row.Location.trim()}" not found in QuickBooks`
+          );
+          if (this.settings.autoCreate) {
+            console.log(`Auto-creating Department: "${row.Location.trim()}"`);
+            department = await this.qboService.createDepartment(
+              row.Location.trim()
+            );
+            departmentId = department.Id;
+            console.log(`Created Department ID: ${departmentId}`);
+          } else {
+            console.log(
+              `Auto-create disabled. Department will not be set on bill.`
+            );
+          }
+        }
+      }
+
+      // Step 5: Find or Create Category/Class if specified
       let classId: string | undefined;
       if (row.Category?.trim()) {
-        const classObj = await this.qboService.findClassByName(
+        console.log(`Looking for Category/Class: "${row.Category.trim()}"`);
+        let classObj = await this.qboService.findClassByName(
           row.Category.trim()
         );
         if (classObj) {
           classId = classObj.Id;
+          console.log(`Found Class ID: ${classId}`);
+        } else {
+          console.log(`Class "${row.Category.trim()}" not found in QuickBooks`);
+          if (this.settings.autoCreate) {
+            console.log(`Auto-creating Class: "${row.Category.trim()}"`);
+            classObj = await this.qboService.createClass(row.Category.trim());
+            classId = classObj.Id;
+            console.log(`Created Class ID: ${classId}`);
+          } else {
+            console.log(
+              `Auto-create disabled. Class will not be set on line item.`
+            );
+          }
         }
-        // If class not found, we'll just skip it (optional field)
       }
 
-      // Step 5: Create Bill
+      // Step 6: Create Bill
       const amount = validateAmount(row.BillLineAmount)!;
       const billDate = parseDate(
         row.BillDate,
@@ -353,7 +402,7 @@ export class CSVProcessor {
         lineDetail.ClassRef = { value: classId };
       }
 
-      const bill = await this.qboService.createBill({
+      const billData: any = {
         VendorRef: { value: vendor.Id! },
         TxnDate: billDate.toISOString().split("T")[0],
         Line: [
@@ -365,7 +414,13 @@ export class CSVProcessor {
           },
         ],
         CurrencyRef: row.Currency ? { value: row.Currency } : undefined,
-      });
+      };
+
+      if (departmentId) {
+        billData.DepartmentRef = { value: departmentId };
+      }
+
+      const bill = await this.qboService.createBill(billData);
 
       // Step 6: Attach files to Bill
       const attachmentResults: AttachmentResult[] = [];
@@ -607,16 +662,37 @@ export class CSVProcessor {
         }
       }
 
-      // Step 3: Find Department/Location if specified
+      // Step 3: Find or Create Department/Location if specified
       let departmentId: string | undefined;
       if (firstRow.Location?.trim()) {
-        const department = await this.qboService.findDepartmentByName(
+        console.log(
+          `Looking for Location/Department: "${firstRow.Location.trim()}"`
+        );
+        let department = await this.qboService.findDepartmentByName(
           firstRow.Location.trim()
         );
         if (department) {
           departmentId = department.Id;
+          console.log(`Found Department ID: ${departmentId}`);
+        } else {
+          console.log(
+            `Department "${firstRow.Location.trim()}" not found in QuickBooks`
+          );
+          if (this.settings.autoCreate) {
+            console.log(
+              `Auto-creating Department: "${firstRow.Location.trim()}"`
+            );
+            department = await this.qboService.createDepartment(
+              firstRow.Location.trim()
+            );
+            departmentId = department.Id;
+            console.log(`Created Department ID: ${departmentId}`);
+          } else {
+            console.log(
+              `Auto-create disabled. Department will not be set on bill.`
+            );
+          }
         }
-        // If department not found, we'll just skip it (optional field)
       }
 
       // Step 4: Create line items for each row
@@ -637,14 +713,30 @@ export class CSVProcessor {
         }
         allSubCustomerIds.push(subCustomer.Id!);
 
-        // Find Category/Class if specified
+        // Find or Create Category/Class if specified
         let classId: string | undefined;
         if (row.Category?.trim()) {
-          const classObj = await this.qboService.findClassByName(
+          console.log(`Looking for Category/Class: "${row.Category.trim()}"`);
+          let classObj = await this.qboService.findClassByName(
             row.Category.trim()
           );
           if (classObj) {
             classId = classObj.Id;
+            console.log(`Found Class ID: ${classId}`);
+          } else {
+            console.log(
+              `Class "${row.Category.trim()}" not found in QuickBooks`
+            );
+            if (this.settings.autoCreate) {
+              console.log(`Auto-creating Class: "${row.Category.trim()}"`);
+              classObj = await this.qboService.createClass(row.Category.trim());
+              classId = classObj.Id;
+              console.log(`Created Class ID: ${classId}`);
+            } else {
+              console.log(
+                `Auto-create disabled. Class will not be set on line item.`
+              );
+            }
           }
         }
 
