@@ -76,7 +76,14 @@ export class QBOService {
 
   async createCustomer(
     displayName: string,
-    parentRef?: string
+    parentRef?: string,
+    options?: {
+      email?: string;
+      startDate?: string;
+      endDate?: string;
+      status?: string;
+      notes?: string;
+    }
   ): Promise<QBOCustomer> {
     return this.retryWithBackoff(async () => {
       return new Promise((resolve, reject) => {
@@ -86,8 +93,31 @@ export class QBOService {
         if (parentRef) {
           customer.ParentRef = { value: parentRef };
           customer.Job = true;
+
+          // Add project-specific fields
+          if (options?.startDate) {
+            customer.JobStartDate = options.startDate;
+          }
+          if (options?.endDate) {
+            customer.JobEndDate = options.endDate;
+          }
+          if (options?.status) {
+            customer.JobStatus = options.status;
+          }
         } else {
           customer.Job = false;
+        }
+
+        // Add email if provided (for both customers and projects)
+        if (options?.email?.trim()) {
+          customer.PrimaryEmailAddr = {
+            Address: options.email.trim(),
+          };
+        }
+
+        // Add notes if provided
+        if (options?.notes?.trim()) {
+          customer.Notes = options.notes.trim();
         }
 
         this.qbo.createCustomer(customer, (err: any, result: any) => {
@@ -136,9 +166,18 @@ export class QBOService {
   async createBill(bill: QBOBill): Promise<any> {
     return this.retryWithBackoff(async () => {
       return new Promise((resolve, reject) => {
+        console.log("Sending bill to QBO API:", JSON.stringify(bill, null, 2));
         this.qbo.createBill(bill, (err: any, result: any) => {
-          if (err) reject(err);
-          else resolve(result);
+          if (err) {
+            console.error(
+              "QBO API Error creating bill:",
+              JSON.stringify(err, null, 2)
+            );
+            reject(err);
+          } else {
+            console.log("Bill created successfully:", result.Id);
+            resolve(result);
+          }
         });
       });
     });
